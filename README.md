@@ -92,9 +92,16 @@ We hosted an example app here: https://2021-utd-hackathon.azurewebsites.net
 
 You can see the React source code in the "client" folder. It's mainly to give you access to working boilerplate so you can focus on the important stuff. Also the server is open-source if you are curious how it works.
 
+You can start the client by installing node, and then going to the folder and running:
+```
+yarn install
+yarn start
+```
+
 You are of course welcome to you use any technology stack and platform you want (But we love great user experiences!)
 
 For python, you can look into this stackoverflow about web sockets. https://stackoverflow.com/questions/3142705/is-there-a-websocket-client-implemented-for-python
+
 
 ## Prizes
 
