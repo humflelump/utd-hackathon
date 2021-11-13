@@ -3,7 +3,7 @@ import { createStyles, makeStyles, Theme } from '@material-ui/core/styles';
 import Toolbar from '@material-ui/core/Toolbar';
 import Typography from '@material-ui/core/Typography';
 import React from 'react';
-import { ClientRequest, processRequest, ServerRequest, ServerResponse } from './optimization';
+import { ClientResponse, processRequest, ServerRequest, ServerResponse } from './optimization';
 
 const useStyles = makeStyles((theme: Theme) =>
   createStyles({
@@ -22,7 +22,7 @@ function App() {
 
   const [request, setRequest] = React.useState<null | ServerRequest>(null);
   const [result, setResult] = React.useState<null | ServerResponse>(null);
-  const [response, setResponse] = React.useState<null | ClientRequest>(null);
+  const [response, setResponse] = React.useState<null | ClientResponse>(null);
 
   React.useEffect(() => {
     const ws = new WebSocket('ws://localhost:9172');
@@ -32,13 +32,12 @@ function App() {
     })
 
     // When the server sends new data, we send how to optimally allocate the water
-    ws.addEventListener('message', function incoming(message) {
-      
+    ws.addEventListener('message', (message) =>{
+
       if (message.data.startsWith('Error')) {
         window.alert(message.data);
         throw Error(message.data)
       }
-
       const data = JSON.parse(message.data);
       if (data.type === "CURRENT_STATE") {
         const request: ServerRequest = JSON.parse(message.data);
@@ -51,13 +50,14 @@ function App() {
         setResult(response);
       }
     });
-    
+
     // Oh no! Something unexpected happened.
-    ws.addEventListener('error', function error(event) {
+    ws.addEventListener('error', (event) => {
       throw Error(JSON.stringify(event));
     })
 
-    return function cleanup() {
+    // cleanup function
+    return () => {
       ws.close();
     }
   }, [])
@@ -73,11 +73,11 @@ function App() {
       </AppBar>
       <div className={classes.body}>
         <div>1.) Server Sends Current State of the System:</div>
-        <textarea id="w3review" name="w3review" rows={10} cols={150} value={JSON.stringify(request, undefined, 2)}/>
+        <textarea rows={10} cols={150} value={JSON.stringify(request, undefined, 2)} />
         <div>2.) Client Sends Solution to the Optimization:</div>
-        <textarea id="w3review" name="w3review" rows={10} cols={150} value={JSON.stringify(response, undefined, 2)}/>
+        <textarea rows={10} cols={150} value={JSON.stringify(response, undefined, 2)}/>
         <div>3.) Server Sends Result:</div>
-        <textarea id="w3review" name="w3review" rows={10} cols={150} value={JSON.stringify(result, undefined, 2)}/>
+        <textarea rows={10} cols={150} value={JSON.stringify(result, undefined, 2)}/>
       </div>
     </div>
   );

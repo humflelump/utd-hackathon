@@ -1,14 +1,12 @@
 import bodyParser from 'body-parser';
 import compression from 'compression';
 import cors from 'cors';
+import * as d3 from 'd3';
 import express, { Request, Response } from 'express';
 import helmet from 'helmet';
-import ws from 'ws';
-import { sortBy } from 'lodash';
-import { names } from './names';
-import { v4 as uuidv4 } from 'uuid';
-import * as d3 from 'd3';
 import Rand from 'rand-seed';
+import ws from 'ws';
+import { names } from './names';
 import { funcs, Point } from './price-functions';
 
 const app = express();
@@ -60,7 +58,7 @@ function getProfitabilityScaleFactor(timestamp: number) {
 interface WaterOperation {
   name: string,
   id: string,
-  valueStructure: Point[],
+  revenueStructure: Point[],
 }
 
 function makeWaterOperations(timestamp: number, waterFlowRate: number) {
@@ -83,16 +81,15 @@ function makeWaterOperations(timestamp: number, waterFlowRate: number) {
     operations.push({
       name,
       id: name.toLowerCase().split(' ').join('_'),
-      valueStructure: values,
+      revenueStructure: values,
     });
   }
   return operations;
 }
 
 const wsServer = new ws.Server({ port: 9172 });
-
 class State {
-  flowRate: number;
+  flowRateIn: number;
   operations: WaterOperation[];
   type = "CURRENT_STATE";
 
@@ -106,28 +103,33 @@ class State {
   }
 
   public update() {
-    this.flowRate = getWaterFlowRate(this.currentTime());
-    this.operations = makeWaterOperations(this.currentTime(), this.flowRate);
+    this.flowRateIn = getWaterFlowRate(this.currentTime());
+    this.operations = makeWaterOperations(this.currentTime(), this.flowRateIn);
   }
 
-  public calculateValue(request: ClientRequest): ServerResponse {
+  public calculateValue(request: ClientResponse): ServerResponse {
+    // probably shouldn't happen
+    if(!request) {
+      throw Error(`Invalid Request ${request}`);
+    }
     if (request.length !== this.operations.length) {
       throw Error(`length of flow rate allocations must match number of operations`);
     }
 
-    const functions: {
-      [operationId: string]: (n: number) => number
-    } = {};
 
-    for (const operation of this.operations) {
-      functions[operation.id] = d3.scaleLinear()
-        .domain(operation.valueStructure.map(d => d.flowPerDay))
-        .range(operation.valueStructure.map(d => d.dollarsPerDay))
-        .clamp(true);
-    }
+    const functions = this.operations.reduce((acc,operation) => {
+      const domain = operation.revenueStructure.map(d => d.flowPerDay);
+      const range = operation.revenueStructure.map(d => d.dollarsPerDay);
+      acc[operation.id] = d3.scaleLinear()
+      .domain(domain)
+      .range(range)
+      .clamp(true);
+      return acc;
+    }, {} as Record<string,  (n: number) => number>)
 
-    let profit = 0;
-    let totalOutFlow = 0;
+
+    let revenuePerDay = 0;
+    let flowRateToOperations = 0;
     for (const operation of request) {
       if (!functions[operation.operationId]) {
         throw Error(`"${operation.operationId}" does not exist`);
@@ -135,18 +137,16 @@ class State {
       if (operation.flowRate < 0) {
         throw Error('Flow rates must be greater than zero.')
       }
-      totalOutFlow += operation.flowRate;
-      profit += functions[operation.operationId](operation.flowRate);
+      flowRateToOperations += operation.flowRate;
+      revenuePerDay += functions[operation.operationId](operation.flowRate);
     }
 
     return {
-      incrementalValue: profit * PING_INTERVAL / (24 * 3600 * 1000),
-      valuePerDay: profit,
-      flowRateIn: this.flowRate,
-      flowRateToOperations: totalOutFlow,
+      incrementalRevenue: revenuePerDay * PING_INTERVAL / (24 * 3600 * 1000),
+      revenuePerDay,
+      flowRateIn: this.flowRateIn,
+      flowRateToOperations,
       type: "OPTIMATION_RESULT",
-      currentPitVolume: null,
-      maximumPitVolume: null,
     }
   }
 }
@@ -156,19 +156,19 @@ setInterval(() => {
   state.update();
 }, 500);
 
-type ClientRequest = {
+type ClientResponse = {
   operationId: string,
   flowRate: number,
 }[];
 
 type ServerResponse = {
-  incrementalValue: number,
-  valuePerDay: number,
+  incrementalRevenue: number,
+  revenuePerDay: number,
   flowRateIn: number,
   flowRateToOperations: number,
   type: "OPTIMATION_RESULT",
-  currentPitVolume: number | null,
-  maximumPitVolume: number | null,
+  currentPitVolume?: number ,
+  maximumPitVolume?: number ,
 }
 
 class Pit {
@@ -179,20 +179,20 @@ class Pit {
     this.capacity = n;
   }
 
-  updateWaterVolume(n: number) {
+  updateWaterVolume(result: ServerResponse) {
+    let n = (result.flowRateIn - result.flowRateToOperations) * (PING_INTERVAL / 24 / 3600 / 1000)
     if (Math.abs(n) < 1e-5) {
       n = 0;
     }
-
-    this.current += n;
-
-    if (this.current < 0 || this.current > this.capacity) {
+    const nextValue = this.current + n;
+    if (nextValue < 0 || nextValue > this.capacity) {
       if (this.capacity === 0) {
-        throw Error('Total flow to operations must match the flow in from the wells');
+        throw Error(`Total flow in (${result.flowRateIn} bbls/day) must match the flow to operations (${result.flowRateToOperations} bbls/day)`);
       } else {
-        throw Error(`The current volume in the pit (${this.current}) is not possible for the size of the pit (${this.capacity})`);
+        throw Error(`The current volume in the pit (${nextValue} bbls) is not possible for the size of the pit (${this.capacity} bbls)`);
       }
     }
+    this.current = nextValue;
   }
 }
 
@@ -215,10 +215,10 @@ wsServer.on('connection', socket => {
         throw Error('Got multiple responses');
       }
       gotResponse = true;
-      const resp: ClientRequest = JSON.parse(String(message));
-      const result: ServerResponse = state.calculateValue(resp);
-      pit.updateWaterVolume((result.flowRateIn - result.flowRateToOperations) * (PING_INTERVAL / 24 / 3600 / 1000))
-      if (pit.capacity > 0) {
+      const resp: ClientResponse = JSON.parse(String(message));
+      const result = state.calculateValue(resp);
+      pit.updateWaterVolume(result)
+      if (pit.capacity !== 0) {
         result.currentPitVolume = pit.current;
         result.maximumPitVolume = pit.capacity;
       }
