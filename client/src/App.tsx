@@ -25,7 +25,9 @@ function App() {
   const [response, setResponse] = React.useState<null | ClientResponse>(null);
 
   React.useEffect(() => {
-    const ws = new WebSocket('ws://localhost:9172');
+    // const ws = new WebSocket('ws://localhost:9172');
+    // eslint-disable-next-line no-restricted-globals
+    const ws = new WebSocket(`wss://2021-utd-hackathon.azurewebsites.net`);
 
     ws.addEventListener('open', () => {
       ws.send(JSON.stringify({setPitCapacity: 100000}));

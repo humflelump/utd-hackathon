@@ -8,6 +8,8 @@ import Rand from 'rand-seed';
 import ws from 'ws';
 import { names } from './names';
 import { funcs, Point } from './price-functions';
+import { createServer } from "http";
+import path from "path";
 
 const app = express();
 app.use(helmet()); // set well-known security-related HTTP headers
@@ -24,10 +26,20 @@ app.get('/ping', async (req: Request, res: Response) => {
   }
 });
 
-const PORT = 9375;
-app.listen(PORT, () => {
+const pathToAppDirectory = path.resolve(__dirname, "dist");
+app.use(express.static(pathToAppDirectory));
+// CLIENT SIDE ROUTING
+app.get("/*", function (req, res) {
+  res.sendFile(path.join(pathToAppDirectory, "index.html"));
+});
+
+const PORT = process.env.PORT || 9375;
+
+const server = createServer(app);
+server.listen(PORT, () => {
   console.log(`Starting on Port ${PORT}!`);
 });
+
 
 const PING_INTERVAL = 5000;
 
@@ -87,7 +99,6 @@ function makeWaterOperations(timestamp: number, waterFlowRate: number) {
   return operations;
 }
 
-const wsServer = new ws.Server({ port: 9172 });
 class State {
   flowRateIn: number;
   operations: WaterOperation[];
@@ -109,7 +120,7 @@ class State {
 
   public calculateValue(request: ClientResponse): ServerResponse {
     // probably shouldn't happen
-    if(!request) {
+    if (!request) {
       throw Error(`Invalid Request ${request}`);
     }
     if (request.length !== this.operations.length) {
@@ -117,15 +128,15 @@ class State {
     }
 
 
-    const functions = this.operations.reduce((acc,operation) => {
+    const functions = this.operations.reduce((acc, operation) => {
       const domain = operation.revenueStructure.map(d => d.flowPerDay);
       const range = operation.revenueStructure.map(d => d.dollarsPerDay);
       acc[operation.id] = d3.scaleLinear()
-      .domain(domain)
-      .range(range)
-      .clamp(true);
+        .domain(domain)
+        .range(range)
+        .clamp(true);
       return acc;
-    }, {} as Record<string,  (n: number) => number>)
+    }, {} as Record<string, (n: number) => number>)
 
 
     let revenuePerDay = 0;
@@ -167,8 +178,8 @@ type ServerResponse = {
   flowRateIn: number,
   flowRateToOperations: number,
   type: "OPTIMATION_RESULT",
-  currentPitVolume?: number ,
-  maximumPitVolume?: number ,
+  currentPitVolume?: number,
+  maximumPitVolume?: number,
 }
 
 class Pit {
@@ -195,6 +206,8 @@ class Pit {
     this.current = nextValue;
   }
 }
+
+const wsServer = new ws.Server({ server });
 
 wsServer.on('connection', socket => {
 

@@ -6,7 +6,7 @@
   "scripts": {
     "test": "jest",
     "start": "nodemon",
-    "start:prod": "node --max_old_space_size=16384 -r ./node_modules/ts-node/register ./app/services/setpoint-iterator2/src/index.ts",
+    "start:prod": "ts-node src/index.ts",
     "build:docker": "docker build -t edit-map-process .",
     "start:docker": "docker-compose build && docker-compose up"
   },
