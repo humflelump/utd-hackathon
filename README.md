@@ -94,9 +94,11 @@ You can see the React source code in the "client" folder. It's mainly to give yo
 
 You are of course welcome to you use any technology stack and platform you want (But we love great user experiences!)
 
+For python, you can look into this stackoverflow about web sockets. https://stackoverflow.com/questions/3142705/is-there-a-websocket-client-implemented-for-python
+
 ## Prizes
 
-The team with the best project will five Oculus Quest Headsets.
+The team with the best project will win five Oculus Quest Headsets.
 
 ## Bonus!
 
