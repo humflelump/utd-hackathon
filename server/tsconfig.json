@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "module": "commonjs",
+    "lib": [
+      "es2019",
+      "es2017",
+      "es7",
+      "es6",
+      "dom"
+    ],
+    "declaration": true,
+    "outDir": "../../test-app/src/redux-visualize-dist",
+    "strict": false,
+    "esModuleInterop": true,
+    "jsx": "react",
+    "noUnusedLocals": false,
+    "allowUnusedLabels": true,
+    "strictNullChecks": true
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "include": [
+    "../../client/src/SharedClientServer"
+  ],
+  "paths": {
+    "@shared/*": [
+      "../../client/src/SharedClientServer"
+    ],
+  }
+}

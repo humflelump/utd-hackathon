@@ -1,0 +1,6 @@
+elevation_cache_service:
+  build: .
+  volumes:
+    - "./src:/server/src"
+  ports:
+    - "9274:9274"
